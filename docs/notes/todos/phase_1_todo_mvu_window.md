@@ -5,7 +5,7 @@ Rust rewrite. The immediate target is a small desktop window that runs a pure
 MVU loop, renders a deterministic frame, accepts text input, and can be tested
 without requiring a GPU or a real window.
 
-The older F# implementation at `D:\dev\projects\pp\Functor` is the reference
+The older F# implementation at `https://github.com/pocinho/Functor` is the reference
 for boundaries, not an API to copy. Its useful lessons are:
 
 - Keep the domain model and update function independent of Avalonia.

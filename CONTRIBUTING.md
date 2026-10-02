@@ -144,18 +144,25 @@ Examples:
 
 # 8. Documentation Requirements
 
-All major features must update:
+Update the documentation owner for the subsystem being changed. Update the
+mdBook or API documentation when the change affects that document's audience;
+keep internal engineering decisions in contributor references and ADRs.
 
 ### **mdBook (`docs/book/`)**
-- architecture  
-- design decisions  
-- roadmap updates  
-- platform notes  
+- end-user workflows and concepts
+- project capabilities and user-facing architecture
+- user-relevant roadmap or platform information
 
 ### **API Docs (`docs/api/`)**
 - crate‑level documentation  
 - module‑level documentation  
 - public API explanations
+
+### **Contributor References (`docs/`)**
+- development and testing workflow
+- module ownership and Rust practices
+- internal architecture decisions
+- future documentation triggers
 
 Documentation is part of the definition of done.
 
