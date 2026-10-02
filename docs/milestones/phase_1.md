@@ -222,7 +222,3 @@ Functors has a stable, documented foundation.
 | 6 | Layout | UI structure |
 | 7 | Prototype | First visible app |
 | 8 | Docs + release | v0.1.0 |
-
-This is a **realistic**, **professional**, **high‑leverage** plan that gets you from “cargo new functors” to “Functors exists.”
-
----

@@ -1,6 +1,4 @@
-# **ROADMAP.md**
-
-## **Functors Roadmap (Early Stage)**  
+# **Functors Roadmap (Early Stage)**  
 *A living document outlining the initial development path for the Functors editor.*
 
 ---
@@ -145,5 +143,3 @@
 
 ## **Status**
 This roadmap is in **early development** and will evolve as Functors grows.
-
----

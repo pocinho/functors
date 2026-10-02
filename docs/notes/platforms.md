@@ -237,5 +237,3 @@ This ensures:
 - long-term maintainability  
 
 Android support fits naturally into this architecture with minimal divergence.
-
----

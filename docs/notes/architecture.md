@@ -259,5 +259,3 @@ Functor is a unified environment that blends:
 - extensibility through plugins  
 
 It is designed to support both **traditional programming** and **computational thinking**, giving you a powerful space to write code, explore ideas, visualize data, and collaborate with agents.
-
----
