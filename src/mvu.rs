@@ -1,4 +1,7 @@
-use crate::model::{Model, Position, Selection};
+use crate::file_io::{FileError, LoadedFile, SavedFile};
+use crate::model::{EditorState, Model, Position, Selection};
+use crate::workspace::{Workspace, WorkspaceError};
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Key {
@@ -11,6 +14,9 @@ pub enum Key {
     Enter,
     Home,
     End,
+    PageUp,
+    PageDown,
+    Escape,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -20,15 +26,35 @@ pub enum Message {
     RedrawRequested,
     KeyPressed(Key),
     TextInput(String),
+    Scrolled { vertical: i32, horizontal: i32 },
+    ToggleCommandBar,
+    OpenSettings,
     PointerPressed { position: Position },
     PointerDragged { position: Position },
     CloseRequested,
+    OpenWorkspacePickerRequested,
+    OpenWorkspaceRequested(PathBuf),
+    WorkspaceOpened(Result<Workspace, WorkspaceError>),
+    OpenFilePickerRequested,
+    OpenFileRequested(PathBuf),
+    FileOpened(Result<LoadedFile, FileError>),
+    SaveFileRequested,
+    FileSaved(Result<SavedFile, FileError>),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     RequestRedraw,
     Exit,
+    OpenWorkspace(PathBuf),
+    OpenFile(PathBuf),
+    SaveFile {
+        path: PathBuf,
+        text: String,
+        expected_stamp: Option<crate::file_io::FileStamp>,
+    },
+    OpenWorkspacePicker,
+    OpenFilePicker,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -50,15 +76,63 @@ pub fn update(mut model: Model, message: Message) -> Transition {
         Message::ModifiersChanged { shift } => model.shift_down = shift,
         Message::RedrawRequested => model.needs_redraw = false,
         Message::TextInput(text) => {
-            consume_selection(&mut model);
-            model.document.insert_text(&mut model.cursor, &text);
+            if model.command_bar_open {
+                model.command_bar_query.push_str(&text);
+            } else {
+                consume_selection(&mut model);
+                model.document.insert_text(&mut model.cursor, &text);
+                if !text.is_empty() {
+                    model.state = if model.file_path.is_some() {
+                        EditorState::Active
+                    } else {
+                        EditorState::Empty
+                    };
+                }
+            }
             model.needs_redraw = true;
             if !text.is_empty() {
                 commands.push(Command::RequestRedraw);
             }
         }
+        Message::Scrolled {
+            vertical,
+            horizontal,
+        } => {
+            model.viewport.vertical_offset = offset_by(model.viewport.vertical_offset, vertical);
+            model.viewport.horizontal_offset =
+                offset_by(model.viewport.horizontal_offset, horizontal);
+            model.needs_redraw = true;
+            commands.push(Command::RequestRedraw);
+        }
         Message::KeyPressed(key) => {
-            apply_key(&mut model, key);
+            if model.command_bar_open && key == Key::Backspace {
+                model.command_bar_query.pop();
+            } else if model.command_bar_open && key == Key::Escape {
+                model.command_bar_open = false;
+                model.command_bar_query.clear();
+            } else if model.command_bar_open && key == Key::Enter {
+                submit_command_bar(&mut model, &mut commands);
+            } else if !model.command_bar_open {
+                apply_key(&mut model, key);
+                model.state = if model.file_path.is_some() {
+                    EditorState::Active
+                } else {
+                    EditorState::Empty
+                };
+            }
+            model.needs_redraw = true;
+            commands.push(Command::RequestRedraw);
+        }
+        Message::ToggleCommandBar => {
+            model.command_bar_open = !model.command_bar_open;
+            model.command_bar_query.clear();
+            model.needs_redraw = true;
+            commands.push(Command::RequestRedraw);
+        }
+        Message::OpenSettings => {
+            model.command_bar_open = false;
+            model.command_bar_query.clear();
+            model.settings_open = true;
             model.needs_redraw = true;
             commands.push(Command::RequestRedraw);
         }
@@ -82,9 +156,105 @@ pub fn update(mut model: Model, message: Message) -> Transition {
             commands.push(Command::RequestRedraw);
         }
         Message::CloseRequested => commands.push(Command::Exit),
+        Message::OpenWorkspacePickerRequested => {}
+        Message::OpenFilePickerRequested => {}
+        Message::OpenWorkspaceRequested(path) => {
+            model.state = EditorState::Loading;
+            commands.push(Command::OpenWorkspace(path));
+        }
+        Message::WorkspaceOpened(result) => {
+            match result {
+                Ok(workspace) => {
+                    model.workspace = Some(workspace);
+                    model.workspace_error = None;
+                    model.state = if model.file_path.is_some() {
+                        EditorState::Active
+                    } else {
+                        EditorState::Empty
+                    };
+                }
+                Err(error) => {
+                    model.workspace_error = Some(error);
+                    model.state = EditorState::Error;
+                }
+            }
+            model.needs_redraw = true;
+            commands.push(Command::RequestRedraw);
+        }
+        Message::OpenFileRequested(path) => {
+            model.state = EditorState::Loading;
+            commands.push(Command::OpenFile(path));
+        }
+        Message::FileOpened(result) => match result {
+            Ok(file) => {
+                model.document = crate::model::Document::from_text(&file.text, file.language);
+                model.file_path = Some(file.path);
+                model.file_stamp = Some(file.stamp);
+                model.file_error = None;
+                model.state = EditorState::Active;
+                model.cursor = Position::default();
+                model.selection = None;
+                model.needs_redraw = true;
+                commands.push(Command::RequestRedraw);
+            }
+            Err(error) => {
+                model.file_error = Some(error);
+                model.state = EditorState::Error;
+                model.needs_redraw = true;
+                commands.push(Command::RequestRedraw);
+            }
+        },
+        Message::SaveFileRequested => {
+            if let Some(path) = &model.file_path {
+                commands.push(Command::SaveFile {
+                    path: path.clone(),
+                    text: model.document.text(),
+                    expected_stamp: model.file_stamp.clone(),
+                });
+            }
+        }
+        Message::FileSaved(result) => match result {
+            Ok(path) => {
+                model.document.dirty = false;
+                model.file_path = Some(path.path);
+                model.file_stamp = Some(path.stamp);
+                model.file_error = None;
+                model.state = EditorState::Active;
+                model.needs_redraw = true;
+                commands.push(Command::RequestRedraw);
+            }
+            Err(error) => {
+                model.file_error = Some(error);
+                model.state = EditorState::Error;
+                model.needs_redraw = true;
+                commands.push(Command::RequestRedraw);
+            }
+        },
     }
 
     Transition { model, commands }
+}
+
+fn submit_command_bar(model: &mut Model, commands: &mut Vec<Command>) {
+    let query = model.command_bar_query.trim().to_ascii_lowercase();
+    model.command_bar_open = false;
+    model.command_bar_query.clear();
+    match query.as_str() {
+        "settings" | "open settings" => model.settings_open = true,
+        "open workspace" | "workspace" => commands.push(Command::OpenWorkspacePicker),
+        "open file" | "file" => commands.push(Command::OpenFilePicker),
+        "save" => {
+            if let Some(path) = &model.file_path {
+                commands.push(Command::SaveFile {
+                    path: path.clone(),
+                    text: model.document.text(),
+                    expected_stamp: model.file_stamp.clone(),
+                });
+            }
+        }
+        _ => {}
+    }
+    model.needs_redraw = true;
 }
 
 fn apply_key(model: &mut Model, key: Key) {
@@ -113,6 +283,15 @@ fn apply_key(model: &mut Model, key: Key) {
         Key::Backspace => model.document.backspace(&mut model.cursor),
         Key::Delete => model.document.delete(&mut model.cursor),
         Key::Enter => model.document.insert_text(&mut model.cursor, "\n"),
+        Key::PageUp => {
+            let page = (model.viewport.height / 20).max(1) as usize;
+            model.viewport.vertical_offset = model.viewport.vertical_offset.saturating_sub(page);
+        }
+        Key::PageDown => {
+            let page = (model.viewport.height / 20).max(1) as usize;
+            model.viewport.vertical_offset = model.viewport.vertical_offset.saturating_add(page);
+        }
+        Key::Escape => {}
     }
 }
 
@@ -121,6 +300,14 @@ fn is_selection_key(key: Key) -> bool {
         key,
         Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End
     )
+}
+
+fn offset_by(offset: usize, delta: i32) -> usize {
+    if delta.is_negative() {
+        offset.saturating_sub(delta.unsigned_abs() as usize)
+    } else {
+        offset.saturating_add(delta as usize)
+    }
 }
 
 fn move_cursor(model: &mut Model, key: Key) {
@@ -178,13 +365,17 @@ fn consume_selection(model: &mut Model) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{Command, Key, Message, update};
+    use crate::file_io::{FileError, FileStamp, LoadedFile};
     use crate::model::{Model, Position, Selection};
+    use crate::syntax::SyntaxLanguage;
+    use crate::workspace::{Workspace, WorkspaceError};
+    use std::path::PathBuf;
 
     #[test]
     fn initial_model_has_one_empty_line_and_requests_a_frame() {
         let model = Model::default();
 
-        assert_eq!(model.document.lines, vec![String::new()]);
+        assert_eq!(model.document.lines(), vec![String::new()]);
         assert_eq!(model.cursor, Position::default());
         assert!(model.needs_redraw);
     }
@@ -193,7 +384,7 @@ mod tests {
     fn text_input_updates_document_cursor_and_redraw_command() {
         let transition = update(Model::default(), Message::TextInput("hello".into()));
 
-        assert_eq!(transition.model.document.lines, vec!["hello"]);
+        assert_eq!(transition.model.document.lines(), vec!["hello"]);
         assert_eq!(transition.model.cursor, Position { line: 0, column: 5 });
         assert!(transition.model.document.dirty);
         assert_eq!(transition.commands, vec![Command::RequestRedraw]);
@@ -207,7 +398,7 @@ mod tests {
         let model = update(model, Message::KeyPressed(Key::Backspace)).model;
 
         assert_eq!(
-            model.document.lines,
+            model.document.lines(),
             vec![String::from("ab"), String::new()]
         );
         assert_eq!(model.cursor, Position { line: 1, column: 0 });
@@ -219,12 +410,12 @@ mod tests {
         model.cursor = Position { line: 0, column: 1 };
 
         let model = update(model, Message::KeyPressed(Key::Delete)).model;
-        assert_eq!(model.document.lines, vec!["a", "cd"]);
+        assert_eq!(model.document.lines(), vec!["a", "cd"]);
 
         let mut model = model;
         model.cursor = Position { line: 0, column: 1 };
         let model = update(model, Message::KeyPressed(Key::Delete)).model;
-        assert_eq!(model.document.lines, vec!["acd"]);
+        assert_eq!(model.document.lines(), vec!["acd"]);
     }
 
     #[test]
@@ -253,6 +444,152 @@ mod tests {
         assert_eq!(transition.model.viewport.width, 800);
         assert_eq!(transition.model.viewport.height, 600);
         assert_eq!(transition.commands, vec![Command::RequestRedraw]);
+    }
+
+    #[test]
+    fn workspace_request_declares_an_effect_and_failure_is_retained() {
+        let path = PathBuf::from("missing-workspace");
+        let transition = update(
+            Model::default(),
+            Message::OpenWorkspaceRequested(path.clone()),
+        );
+        assert_eq!(transition.commands, vec![Command::OpenWorkspace(path)]);
+
+        let error = WorkspaceError::InvalidRoot(PathBuf::from("missing-workspace"));
+        let transition = update(
+            transition.model,
+            Message::WorkspaceOpened(Err(error.clone())),
+        );
+        assert_eq!(transition.model.workspace, None);
+        assert_eq!(transition.model.workspace_error, Some(error));
+        assert_eq!(transition.commands, vec![Command::RequestRedraw]);
+    }
+
+    #[test]
+    fn file_request_enters_loading_and_failure_enters_error_state() {
+        let path = PathBuf::from("main.rs");
+        let transition = update(Model::default(), Message::OpenFileRequested(path.clone()));
+
+        assert_eq!(transition.model.state, crate::model::EditorState::Loading);
+        assert_eq!(transition.commands, vec![Command::OpenFile(path.clone())]);
+
+        let transition = update(
+            transition.model,
+            Message::FileOpened(Err(FileError::Read {
+                path,
+                message: "missing".into(),
+            })),
+        );
+        assert_eq!(transition.model.state, crate::model::EditorState::Error);
+    }
+
+    #[test]
+    fn scroll_messages_update_both_viewport_offsets() {
+        let mut model = Model::default();
+        model.viewport.vertical_offset = 4;
+        model.viewport.horizontal_offset = 3;
+
+        let transition = update(
+            model,
+            Message::Scrolled {
+                vertical: -2,
+                horizontal: 5,
+            },
+        );
+
+        assert_eq!(transition.model.viewport.vertical_offset, 2);
+        assert_eq!(transition.model.viewport.horizontal_offset, 8);
+        assert_eq!(transition.commands, vec![Command::RequestRedraw]);
+    }
+
+    #[test]
+    fn workspace_success_replaces_old_error() {
+        let error = WorkspaceError::InvalidRoot(PathBuf::from("missing-workspace"));
+        let model = update(Model::default(), Message::WorkspaceOpened(Err(error))).model;
+        let workspace = Workspace {
+            root: PathBuf::from("workspace"),
+            entries: Vec::new(),
+        };
+
+        let transition = update(model, Message::WorkspaceOpened(Ok(workspace.clone())));
+        assert_eq!(transition.model.workspace, Some(workspace));
+        assert_eq!(transition.model.workspace_error, None);
+    }
+
+    #[test]
+    fn opening_a_workspace_after_a_file_restores_active_state() {
+        let model = Model {
+            file_path: Some(PathBuf::from("main.rs")),
+            state: crate::model::EditorState::Loading,
+            ..Model::default()
+        };
+        let workspace = Workspace {
+            root: PathBuf::from("workspace"),
+            entries: Vec::new(),
+        };
+
+        let transition = update(model, Message::WorkspaceOpened(Ok(workspace)));
+
+        assert_eq!(transition.model.state, crate::model::EditorState::Active);
+    }
+
+    #[test]
+    fn opening_a_file_resets_document_state_and_selects_its_language() {
+        let path = PathBuf::from("main.rs");
+        let transition = update(
+            Model::default(),
+            Message::FileOpened(Ok(LoadedFile {
+                path: path.clone(),
+                text: "fn main() {}".into(),
+                language: SyntaxLanguage::Rust,
+                stamp: FileStamp {
+                    length: 12,
+                    modified: None,
+                },
+            })),
+        );
+
+        assert_eq!(transition.model.file_path, Some(path));
+        assert_eq!(transition.model.document.text(), "fn main() {}");
+        assert_eq!(transition.model.document.language, SyntaxLanguage::Rust);
+        assert!(!transition.model.document.dirty);
+        assert_eq!(transition.model.cursor, Position::default());
+    }
+
+    #[test]
+    fn failed_save_keeps_dirty_state_and_reports_the_error() {
+        let path = PathBuf::from("main.rs");
+        let model = update(
+            Model::default(),
+            Message::FileOpened(Ok(LoadedFile {
+                path: path.clone(),
+                text: "fn main() {}".into(),
+                language: SyntaxLanguage::Rust,
+                stamp: FileStamp {
+                    length: 12,
+                    modified: None,
+                },
+            })),
+        )
+        .model;
+        let model = update(model, Message::TextInput("!".into())).model;
+        let transition = update(
+            model,
+            Message::FileSaved(Err(FileError::Write {
+                path: path.clone(),
+                message: "permission denied".into(),
+            })),
+        );
+
+        assert!(transition.model.document.dirty);
+        assert_eq!(transition.model.file_path, Some(path.clone()));
+        assert_eq!(
+            transition.model.file_error,
+            Some(FileError::Write {
+                path,
+                message: "permission denied".into(),
+            })
+        );
     }
 
     #[test]
@@ -325,7 +662,7 @@ mod tests {
 
         let transition = update(model, Message::TextInput("X".into()));
 
-        assert_eq!(transition.model.document.lines, vec!["aXef"]);
+        assert_eq!(transition.model.document.lines(), vec!["aXef"]);
         assert_eq!(transition.model.cursor, Position { line: 0, column: 2 });
         assert_eq!(transition.model.selection, None);
     }
@@ -350,7 +687,7 @@ mod tests {
 
         let transition = update(model, Message::TextInput("X".into()));
 
-        assert_eq!(transition.model.document.lines, vec!["aXf"]);
+        assert_eq!(transition.model.document.lines(), vec!["aXf"]);
         assert_eq!(transition.model.cursor, Position { line: 0, column: 2 });
     }
 
@@ -373,7 +710,7 @@ mod tests {
 
         let transition = update(model, Message::KeyPressed(Key::Backspace));
 
-        assert_eq!(transition.model.document.lines, vec!["aef"]);
+        assert_eq!(transition.model.document.lines(), vec!["aef"]);
         assert_eq!(transition.model.cursor, Position { line: 0, column: 1 });
     }
 
@@ -396,7 +733,7 @@ mod tests {
 
         let transition = update(model, Message::KeyPressed(Key::Enter));
 
-        assert_eq!(transition.model.document.lines, vec!["a", "ef"]);
+        assert_eq!(transition.model.document.lines(), vec!["a", "ef"]);
         assert_eq!(transition.model.cursor, Position { line: 1, column: 0 });
     }
 
@@ -408,7 +745,7 @@ mod tests {
         let model = update(model, Message::KeyPressed(Key::Right)).model;
         let transition = update(model, Message::KeyPressed(Key::Right));
 
-        assert_eq!(transition.model.document.lines, vec!["abcd"]);
+        assert_eq!(transition.model.document.lines(), vec!["abcd"]);
         assert_eq!(transition.model.cursor, Position { line: 0, column: 2 });
         assert_eq!(
             transition.model.selection,
@@ -438,7 +775,7 @@ mod tests {
 
         let transition = update(model, Message::KeyPressed(Key::Left));
 
-        assert_eq!(transition.model.document.lines, vec!["abcd"]);
+        assert_eq!(transition.model.document.lines(), vec!["abcd"]);
         assert_eq!(transition.model.cursor, Position { line: 0, column: 2 });
         assert_eq!(transition.model.selection, None);
     }

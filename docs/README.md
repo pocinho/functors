@@ -14,6 +14,7 @@ references for Functors.
 - [Future Documentation](future.md) - documentation to add when future boundaries become real
 - [Roadmap](roadmap.md) - planned capabilities and sequencing
 - [Platforms](platforms.md) - platform constraints and support notes
+- [Current Blockers](current_blockers.md) - active visual and architecture blockers
 
 ## Documentation Areas
 

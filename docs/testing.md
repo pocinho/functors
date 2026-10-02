@@ -49,6 +49,7 @@ Prefer semantic assertions over incidental implementation details. Test both
 successful transitions and invalid or boundary inputs. Useful cases include:
 
 - empty and single-line documents;
+- large Rope-backed documents and multiline boundary edits;
 - Unicode scalar and grapheme-sensitive positions;
 - selections spanning lines;
 - resize and surface-loss behavior;

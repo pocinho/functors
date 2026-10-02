@@ -24,7 +24,7 @@ filesystem APIs, clocks, or network clients.
 | `model` / document | positions, ranges, selections, edits, cursor and document invariants | platform event types or GPU resources |
 | `view` / layout | deterministic frame descriptions, hit testing, geometry | GPU calls, window handles, or domain-side mutation |
 | `renderer` | WGPU resources, surface lifecycle, buffers, pipelines, presentation | direct inspection of the domain model |
-| `workspace` | project roots, files, persistence, workspace metadata | editor rendering details |
+| `workspace.rs` | validated project roots, directory entries, discovery errors | editor rendering details and model mutation |
 | `notebook` | cells, dependency graph, execution state, outputs | platform lifecycle and direct UI mutation |
 | `agents` | agent sessions, tool calls, streaming, cancellation, diagnostics | unrestricted access to application internals |
 | `plugins` | capability-limited extension contracts and lifecycle | implicit global state or arbitrary platform access |

@@ -39,18 +39,21 @@ headless versus GPU testing.
 **Current owners:** `docs/architecture.md`, `docs/testing.md`, and the renderer
 ownership guidance in `docs/module_ownership.md`.
 
+The active visual-quality risks and renderer/widget decision points are tracked
+in [`docs/current_blockers.md`](current_blockers.md).
+
 ### Workspace and Persistence
 
-**Suggested file:** `docs/workspace_model.md`
+The Phase 1 workspace boundary is now documented in
+`docs/decisions/0004-workspace-persistence-and-discovery.md` and
+`docs/architecture.md`. It covers validated roots, shallow discovery, in-memory
+snapshots, and the decision to defer persistence and file watching.
 
-**Create when:** projects, files, tabs, persistence, or workspace metadata are
-implemented.
+Create `docs/workspace_model.md` when projects, tabs, persistence, or workspace
+metadata become implemented features.
 
 **Cover:** workspace identity, project roots, file ownership, metadata format,
 serialization, migrations, file watching, failure recovery, and compatibility.
-
-**Current owners:** the workspace sections of `docs/architecture.md` and the
-product roadmap.
 
 ## Later Feature Boundaries
 

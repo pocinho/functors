@@ -21,8 +21,11 @@ Functor aims to be a place where code, ideas, agents, and visualizations coexist
 The first Rust desktop shell targets Windows, macOS, and Linux through
 `winit` 0.30.13. `src/main.rs` currently owns only the platform lifecycle:
 window creation, event translation, redraw requests, resize notifications, and
-clean shutdown. The MVU state, backend-neutral view, and WGPU renderer are
-implemented in the sibling modules under `src/`.
+clean shutdown. `Ctrl+O` opens the native folder picker, `Ctrl+P` opens a file,
+and `Ctrl+S` saves the active file. These actions send selected paths and file
+results through the existing effects. The MVU state,
+backend-neutral view, and WGPU renderer are implemented in the sibling modules
+under `src/`.
 
 ### Phase 1 Implementation Guidance
 
@@ -34,6 +37,10 @@ window is being proven:
 - `mvu.rs` owns messages, pure update logic, commands, and transition tests.
 - `model.rs` owns document editing, positions, selections, viewport state, and
 	editor invariants.
+- `workspace.rs` owns workspace data and directory discovery at the filesystem
+	boundary; MVU receives its results as semantic messages.
+- `file_io.rs` owns UTF-8 file loading and temporary-file saves; MVU receives
+	file results and keeps dirty state authoritative.
 - `view.rs` produces deterministic, backend-neutral frame geometry.
 - `renderer.rs` owns WGPU setup and consumes only `FrameDescription`.
 
@@ -42,10 +49,15 @@ Keep this dependency direction stable:
 ```text
 winit -> input adapter -> Message -> update -> Model -> view/layout
 			-> FrameDescription -> renderer -> redraw request
+                         workspace effect -> WorkspaceOpened -> update
 ```
 
-Domain and view code must not depend on winit, WGPU, window handles, clocks,
-or filesystem APIs. Do not split the flat modules into the aspirational
+Domain and view code must not depend on winit, WGPU, window handles, clocks, or
+filesystem APIs. `workspace.rs` is the explicit filesystem boundary; it
+returns stable workspace data and structured errors to the pure update loop.
+`file_io.rs` is the corresponding file boundary, with UTF-8 as the initial
+encoding policy.
+Do not split the flat modules into the aspirational
 directory tree merely for symmetry. Extract `app`/`platform` first when event
 routing or transient pointer/modifier state grows; split model, MVU, view, and
 renderer modules only when they have multiple ownership reasons or become hard
@@ -53,9 +65,12 @@ to test independently.
 
 Keep document invariants at the document boundary, keep `FrameDescription`
 inspectable and deterministic, and add headless tests before GUI tests. The
-temporary bitmap text path is deliberately provisional; production shaping,
-grapheme-aware movement, fallback fonts, persistence, dialogs, plugins, and
-diagnostics belong behind later ownership boundaries.
+renderer currently loads Consolas as the Windows editor font and Segoe UI Emoji
+as its fallback, with a public-domain bitmap path as a degraded fallback. The
+intended production text backend is Skia, which should provide
+cross-platform shaping, platform font fallback, emoji handling, and future
+diagnostic overlays while WGPU remains the composition path. See
+`docs/decisions/0005-skia-text-rendering-and-diagnostics.md`.
 
 For Rust changes, run `cargo fmt --check`, `cargo check`, and `cargo test`.
 Changes to window lifecycle, input routing, rendering, or visible geometry

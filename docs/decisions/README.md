@@ -35,3 +35,6 @@ workflow documentation.
 ## Decisions
 
 - [0001: Preserve Explicit Domain and Effect Boundaries](0001-explicit-domain-effect-boundaries.md)
+- [0002: Use a Private Rope-Backed Document](0002-private-rope-backed-document.md)
+- [0003: Keep Syntax Highlighting Backend-Neutral](0003-backend-neutral-syntax-highlighting.md)
+- [0005: Prefer Skia for Cross-Platform Text Rendering](0005-skia-text-rendering-and-diagnostics.md)

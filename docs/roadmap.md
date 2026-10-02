@@ -1,4 +1,4 @@
-# **Functors Roadmap (Early Stage)**  
+# **Functors Roadmap**
 *A living document outlining the initial development path for the Functors editor.*
 
 ---
@@ -29,7 +29,25 @@
 - Create basic workspace structure (open folder, list files)  
 - Add file open/save support  
 
-**Outcome:** A functional text editor with deterministic rendering.
+**Outcome:** Core MVU implementation complete. The usability gate remains open
+until richer menu interaction, scrollbar dragging, and a complete
+command/settings workflow are in place.
+
+### Phase 1 usability extension
+
+- [x] Semantic vertical and horizontal scrolling with visible scrollbar thumbs.
+- [x] Unicode bitmap glyph coverage for supported scripts with visible fallback
+  for unsupported characters.
+- [x] Clickable menu strip and `Ctrl+K` command bar shell.
+- [x] Settings command opens a visible settings surface.
+- [x] Integrate a real font rasterizer with Consolas and Segoe UI Emoji fallback.
+- [x] Adopt Skia for production cross-platform text shaping, emoji rendering,
+      and diagnostics overlays.
+- [ ] Add scrollbar thumb dragging and complete menu command behavior.
+
+Phase 2 should not begin until this extension is complete. The bitmap/fontdue
+path remains an intermediate fallback. Native color emoji validation and richer
+visual programming diagnostics remain follow-up work on the Skia foundation.
 
 ---
 
@@ -142,4 +160,5 @@
 ---
 
 ## **Status**
-This roadmap is in **early development** and will evolve as Functors grows.
+Phase 1 is complete. This roadmap remains a living plan and will evolve as
+notebook, execution, agent, plugin, and workspace UX capabilities are added.
