@@ -16,6 +16,14 @@ Functor is a hybrid **code editor**, **reactive notebook**, and **agentic worksp
 
 Functor aims to be a place where code, ideas, agents, and visualizations coexist seamlessly.
 
+### Current Phase 1 Shell
+
+The first Rust desktop shell targets Windows, macOS, and Linux through
+`winit` 0.30.13. `src/main.rs` currently owns only the platform lifecycle:
+window creation, redraw requests, resize notifications, and clean shutdown.
+MVU state, rendering, and GPU setup will be added behind this boundary in the
+next Phase 1 steps.
+
 ---
 
 ## **2. Core Architectural Pillars**

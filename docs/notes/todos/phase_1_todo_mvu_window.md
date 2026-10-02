@@ -78,13 +78,13 @@ winit event -> semantic Message -> pure update -> Model -> pure view/layout
 
 ### 1. Establish a buildable shell
 
-- [ ] Confirm the supported desktop target and Rust toolchain.
-- [ ] Add the smallest compatible versions of `winit`, `wgpu`, `pollster`, and
-  `bytemuck` only when a shader or GPU buffer needs it. Add `ropey` when the
-  buffer work begins, not before.
-- [ ] Keep `main.rs` as a thin composition root.
-- [ ] Run `cargo fmt --check` and `cargo check` before introducing rendering.
-- [ ] Record the chosen crate versions and platform assumptions in the main
+- [x] Confirm the supported desktop target and Rust toolchain.
+- [x] Add `winit` 0.30.13 as the initial desktop windowing dependency. Defer
+  `wgpu`, `pollster`, and `bytemuck` until a shader or GPU buffer needs them;
+  add `ropey` when the buffer work begins.
+- [x] Keep `main.rs` as a thin composition root.
+- [x] Run `cargo fmt --check` and `cargo check` before introducing rendering.
+- [x] Record the chosen crate version and platform assumptions in the main
   architecture note.
 
 **Checkpoint:** the project compiles with a windowing dependency and has a
