@@ -20,9 +20,46 @@ Functor aims to be a place where code, ideas, agents, and visualizations coexist
 
 The first Rust desktop shell targets Windows, macOS, and Linux through
 `winit` 0.30.13. `src/main.rs` currently owns only the platform lifecycle:
-window creation, redraw requests, resize notifications, and clean shutdown.
-MVU state, rendering, and GPU setup will be added behind this boundary in the
-next Phase 1 steps.
+window creation, event translation, redraw requests, resize notifications, and
+clean shutdown. The MVU state, backend-neutral view, and WGPU renderer are
+implemented in the sibling modules under `src/`.
+
+### Phase 1 Implementation Guidance
+
+The current crate intentionally uses a flat module layout while the first
+window is being proven:
+
+- `main.rs` is the composition root and platform event loop.
+- `input.rs` translates winit events into semantic messages.
+- `mvu.rs` owns messages, pure update logic, commands, and transition tests.
+- `model.rs` owns document editing, positions, selections, viewport state, and
+	editor invariants.
+- `view.rs` produces deterministic, backend-neutral frame geometry.
+- `renderer.rs` owns WGPU setup and consumes only `FrameDescription`.
+
+Keep this dependency direction stable:
+
+```text
+winit -> input adapter -> Message -> update -> Model -> view/layout
+			-> FrameDescription -> renderer -> redraw request
+```
+
+Domain and view code must not depend on winit, WGPU, window handles, clocks,
+or filesystem APIs. Do not split the flat modules into the aspirational
+directory tree merely for symmetry. Extract `app`/`platform` first when event
+routing or transient pointer/modifier state grows; split model, MVU, view, and
+renderer modules only when they have multiple ownership reasons or become hard
+to test independently.
+
+Keep document invariants at the document boundary, keep `FrameDescription`
+inspectable and deterministic, and add headless tests before GUI tests. The
+temporary bitmap text path is deliberately provisional; production shaping,
+grapheme-aware movement, fallback fonts, persistence, dialogs, plugins, and
+diagnostics belong behind later ownership boundaries.
+
+For Rust changes, run `cargo fmt --check`, `cargo check`, and `cargo test`.
+Changes to window lifecycle, input routing, rendering, or visible geometry
+also require a `cargo run` smoke test on the primary desktop target.
 
 ---
 

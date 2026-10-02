@@ -79,9 +79,9 @@ winit event -> semantic Message -> pure update -> Model -> pure view/layout
 ### 1. Establish a buildable shell
 
 - [x] Confirm the supported desktop target and Rust toolchain.
-- [x] Add `winit` 0.30.13 as the initial desktop windowing dependency. Defer
-  `wgpu`, `pollster`, and `bytemuck` until a shader or GPU buffer needs them;
-  add `ropey` when the buffer work begins.
+- [x] Add `winit` 0.30.13 as the initial desktop windowing dependency and add
+  `wgpu` 30.0.1 with `pollster` for the first clear pass. Add `ropey` when the
+  buffer work begins.
 - [x] Keep `main.rs` as a thin composition root.
 - [x] Run `cargo fmt --check` and `cargo check` before introducing rendering.
 - [x] Record the chosen crate version and platform assumptions in the main
@@ -109,14 +109,13 @@ keeps the code straightforward; replace it with `ropey::Rope` once editing
 operations are covered. Do not let the rendering or window code depend on the
 buffer representation.
 
-- [ ] Define `Position { line, column }` and document bounds invariants.
-- [ ] Define viewport width/height and vertical/horizontal offsets.
-- [ ] Define insert-mode behavior as the default first mode.
-- [ ] Define whether columns are UTF-8 byte offsets, Unicode scalar offsets,
-  or UTF-16 offsets. Pick one internal representation and convert only at
-  platform/API boundaries. Prefer grapheme-aware movement for user-visible
-  cursor behavior.
-- [ ] Add model constructors with a deterministic initial document.
+- [x] Define `Position { line, column }` and document bounds invariants.
+- [x] Define viewport width/height and vertical/horizontal offsets.
+- [x] Define insert-mode behavior as the default first mode.
+- [x] Use Unicode scalar offsets for internal columns; convert only at
+  platform/API boundaries. Add grapheme-aware movement when the text layout
+  backend is introduced.
+- [x] Add model constructors with a deterministic initial document.
 
 **Checkpoint:** model construction has no filesystem, window, clock, or GPU
 dependency.
@@ -131,7 +130,7 @@ enum Message {
     RedrawRequested,
     KeyPressed(Key),
     TextInput(String),
-    PointerPressed { x: f32, y: f32 },
+    PointerPressed { position: Position },
     CloseRequested,
 }
 ```
@@ -140,12 +139,12 @@ The exact enum can evolve, but platform event types should not leak into the
 domain. `update` should return the next model plus declarative commands, for
 example `Command::RequestRedraw` or `Command::Exit`.
 
-- [ ] Implement resize with non-negative offsets and stored dimensions.
-- [ ] Implement text insertion, newline, backspace, and cursor movement.
-- [ ] Clamp cursor positions after every edit.
-- [ ] Mark the document dirty only when the text changes.
-- [ ] Make repeated resize, redraw, and unsupported-key messages harmless.
-- [ ] Add tests for each transition and for cursor behavior at document edges.
+- [x] Implement resize with non-negative offsets and stored dimensions.
+- [x] Implement text insertion, newline, backspace, and cursor movement.
+- [x] Clamp cursor positions after every edit.
+- [x] Mark the document dirty only when the text changes.
+- [x] Make repeated resize, redraw, and unsupported-key messages harmless.
+- [x] Add tests for each transition and for cursor behavior at document edges.
 
 **Checkpoint:** a test can feed messages to `update` and assert the complete
 next model without starting a window.
@@ -159,26 +158,29 @@ does not call WGPU:
 struct FrameDescription {
     viewport: Size,
     background: Color,
-  line_numbers: Vec<LineNumber>,
+    line_numbers: Vec<LineNumber>,
     text_runs: Vec<TextRun>,
     selections: Vec<Rect>,
     cursors: Vec<Rect>,
 }
 ```
 
-- [ ] Slice only visible lines from the document using viewport offsets.
-- [ ] Define fixed first-pass font metrics (`line_height`, `advance`) behind a
+- [x] Slice only visible lines from the document using viewport offsets.
+- [x] Define fixed first-pass font metrics (`line_height`, `advance`) behind a
   `TextMeasurer` trait or configuration object.
-- [ ] Compute gutter width from line count and a minimum width.
-- [ ] Map positions to rectangles and pointer coordinates back to positions.
-- [ ] Keep horizontal scroll coordinates consistent for text, selection, and
+- [x] Compute gutter width from line count and a minimum width.
+- [x] Map positions to rectangles and pointer coordinates back to positions.
+- [x] Keep horizontal scroll coordinates consistent for text, selection, and
   hit testing.
-- [ ] Define explicit draw ordering: background, gutter, highlights,
-  selection, text, diagnostics, cursor.
-- [ ] Add tests for empty buffers, final-line scrolling, clamping, and
+- [x] Define explicit draw ordering: background, gutter, highlights,
+  selection, text, diagnostics, cursor. The current renderer implements the
+  available layers in that order and leaves diagnostics empty when no model
+  selection is present.
+- [x] Add tests for empty buffers, final-line scrolling, clamping, and
   viewport slicing.
-- [ ] Add Unicode tests before adopting a rope or real font shaper: emoji,
-  combining marks, tabs, and a cursor at the end of a line.
+- [x] Add complete first-pass Unicode contract tests before adopting a rope or
+  real font shaper: emoji, combining marks, tabs, and a cursor at the end of a
+  line. These currently use one fixed advance per Unicode scalar.
 
 **Checkpoint:** `view(model, metrics)` returns the same `FrameDescription` for
 the same inputs and the result is inspectable in a unit test.
@@ -188,33 +190,38 @@ the same inputs and the result is inspectable in a unit test.
 Use `winit` only for lifecycle and input, and `wgpu` only for the renderer.
 Keep initialization explicit and asynchronous where the APIs require it.
 
-- [ ] Create the event loop and a resizable window.
-- [ ] Create a WGPU instance, surface, adapter, device, and queue.
-- [ ] Configure the surface from the current window size and handle zero-sized
+- [x] Create the event loop and a resizable window.
+- [x] Create a WGPU instance, surface, adapter, device, and queue.
+- [x] Configure the surface from the current window size and handle zero-sized
   surfaces during minimize/resize.
-- [ ] Add a minimal shader/pipeline that clears the surface with the model’s
+- [x] Add a minimal clear pass that clears the surface with the model’s
   background color.
-- [ ] Handle `SurfaceError::Lost` by reconfiguring and `OutOfMemory` by exiting.
-- [ ] Request redraw after state changes and in `RedrawRequested` render one
+- [x] Handle WGPU 30 surface loss/outdated statuses by reconfiguring; skip
+  timeout, occluded, and validation frames.
+- [x] Request redraw after state changes and in `RedrawRequested` render one
   frame.
-- [ ] Exit cleanly on `CloseRequested`.
+- [x] Exit cleanly on `CloseRequested`.
 
-**Checkpoint:** `cargo run` opens a stable window, resizes without panic, and
-closes without leaving a stuck process.
+**Checkpoint:** `cargo run` opens a stable clearable window, resizes without
+panic, and closes without leaving a stuck process. The WGPU clear-pass smoke
+run completed cleanly on the primary Windows development platform.
 
 ### 6. Render the first visible editor frame
 
 Start with geometry that proves the entire pipeline, not a full text engine:
 
-- [ ] Draw the background and gutter.
-- [ ] Draw line numbers using a temporary fixed-width glyph strategy or the
-  smallest text-rendering integration that works on the target platform.
-- [ ] Draw the initial title/document text.
-- [ ] Draw a cursor rectangle at the model cursor position.
-- [ ] Render a selection rectangle when the model contains a selection.
-- [ ] Keep the WGPU renderer consuming only `FrameDescription` and render
+- [x] Draw the background and line-number gutter.
+- [x] Draw line numbers using the temporary `font8x8` fixed-width glyph
+  strategy.
+- [x] Draw the initial document text with the temporary bitmap glyph strategy.
+- [x] Draw a cursor rectangle at the model cursor position.
+- [x] Render selection rectangles when the model contains a selection. The
+  model stores an optional anchor/focus range and layout emits clipped
+  per-line rectangles; pointer drag now updates the anchor/focus range.
+- [x] Keep the WGPU renderer consuming only `FrameDescription` and render
   configuration.
-- [ ] Ensure the first frame is visible even with an empty document.
+- [x] Ensure the first frame is visible even with an empty document through the
+  background, gutter, and cursor layers.
 
 The text backend is a deliberate decision point. Evaluate `cosmic-text`,
 `glyphon`, Vello, and a simpler first-pass atlas against Unicode shaping,
@@ -226,13 +233,15 @@ cursor, and resize behavior.
 
 ### 7. Connect real input
 
-- [ ] Translate `winit` keyboard events into semantic `KeyPressed` messages.
-- [ ] Use text/IME input events for inserted text instead of treating key codes
+- [x] Translate `winit` keyboard events into semantic `KeyPressed` messages.
+- [x] Use text/IME input events for inserted text instead of treating key codes
   as characters.
-- [ ] Map arrows, backspace, enter, home, and end first.
-- [ ] Map pointer coordinates through layout to a cursor position.
-- [ ] Request redraw only after a state transition that changes the frame.
-- [ ] Verify that focus loss and modifier changes do not leave stale state.
+- [x] Map arrows, backspace, enter, home, and end first.
+- [x] Map pointer coordinates through layout to a cursor position.
+- [x] Request redraw after input and resize state transitions.
+- [x] Verify that focus loss and modifier changes do not leave stale state.
+  Pointer drag state and Shift state are cleared on focus loss; Shift
+  navigation extends selections through semantic modifier messages.
 
 The F# adapter is a useful model here: platform-specific keys are normalized
 before keymap/editor logic sees them. Preserve that separation in Rust.
@@ -244,13 +253,13 @@ pointer click moves the cursor to the expected line and column.
 
 Automated tests should remain platform-independent wherever possible:
 
-- [ ] `Model::initial` produces the expected empty/seed document.
-- [ ] `update` handles insertion, deletion, movement, resize, and dirty state.
-- [ ] Layout slices only visible lines and clamps offsets.
-- [ ] Position hit testing clamps outside the document.
-- [ ] Text runs cover the source line without gaps or overlaps.
-- [ ] Unicode and tab columns preserve the chosen coordinate contract.
-- [ ] A frame can be generated without a GPU.
+- [x] `Model::initial` produces the expected empty/seed document.
+- [x] `update` handles insertion, deletion, movement, resize, and dirty state.
+- [x] Layout slices only visible lines and clamps offsets.
+- [x] Position hit testing clamps outside the document.
+- [x] Text runs cover the source line without gaps or overlaps.
+- [x] Unicode and tab columns preserve the chosen coordinate contract.
+- [x] A frame can be generated without a GPU.
 
 Manual smoke test on the primary desktop target:
 
