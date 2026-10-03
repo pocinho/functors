@@ -8,8 +8,10 @@ bytemuck = { version = "1.25.0", features = ["derive"] }
 fontdue = "0.9.3"
 font8x8 = "0.3.1"
 pollster = "1.0.1"
+parley = "0.11.1"
 rfd = "0.15.4"
 ropey = "1.6.1"
 skia-safe = { version = "0.78.2", default-features = false, features = ["binary-cache", "embed-icudtl", "textlayout"] }
+vello = "0.11.0"
 wgpu = "30.0.1"
 winit = "0.30.13"

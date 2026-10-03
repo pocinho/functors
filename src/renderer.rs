@@ -11,6 +11,7 @@ use skia_safe::{Color as SkiaColor, ColorType, FontMgr, FontStyle, Typeface};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+use crate::vello_scene::VelloGpuRenderer;
 use crate::view::{Color, FrameDescription};
 
 pub struct Renderer {
@@ -20,6 +21,7 @@ pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
     fonts: FontSet,
+    vello: Option<VelloGpuRenderer>,
 }
 
 pub const PRIMARY_FONT_FAMILY: &str = "Consolas";
@@ -238,12 +240,30 @@ impl Renderer {
             .await?;
 
         let capabilities = surface.get_capabilities(&adapter);
-        let format = capabilities
-            .formats
-            .iter()
-            .copied()
-            .find(wgpu::TextureFormat::is_srgb)
-            .unwrap_or(capabilities.formats[0]);
+        let vello_format = (adapter.get_info().device_type != wgpu::DeviceType::Cpu)
+            .then_some(())
+            .and_then(|_| {
+                capabilities
+                    .usages
+                    .contains(wgpu::TextureUsages::STORAGE_BINDING)
+                    .then_some(())
+            })
+            .and_then(|_| {
+                capabilities.formats.iter().copied().find(|format| {
+                    adapter
+                        .get_texture_format_features(*format)
+                        .allowed_usages
+                        .contains(wgpu::TextureUsages::STORAGE_BINDING)
+                })
+            });
+        let format = vello_format.unwrap_or_else(|| {
+            capabilities
+                .formats
+                .iter()
+                .copied()
+                .find(wgpu::TextureFormat::is_srgb)
+                .unwrap_or(capabilities.formats[0])
+        });
         let present_mode = capabilities
             .present_modes
             .iter()
@@ -251,9 +271,33 @@ impl Renderer {
             .find(|mode| *mode == wgpu::PresentMode::Fifo)
             .unwrap_or(capabilities.present_modes[0]);
         let alpha_mode = capabilities.alpha_modes[0];
-        let config = surface_config(format, present_mode, alpha_mode, size.width, size.height);
+        let vello_enabled = vello_format.is_some();
+        let usage = if vello_enabled {
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::STORAGE_BINDING
+        } else {
+            wgpu::TextureUsages::RENDER_ATTACHMENT
+        };
+        let config = surface_config(
+            format,
+            present_mode,
+            alpha_mode,
+            usage,
+            size.width,
+            size.height,
+        );
         surface.configure(&device, &config);
         let pipeline = create_pipeline(&device, format);
+        let vello = if vello_enabled {
+            match VelloGpuRenderer::new(&device) {
+                Ok(renderer) => Some(renderer),
+                Err(error) => {
+                    eprintln!("failed to initialize Vello renderer: {error}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         Ok(Self {
             surface,
@@ -262,6 +306,7 @@ impl Renderer {
             config,
             pipeline,
             fonts: FontSet::load(),
+            vello,
         })
     }
 
@@ -293,6 +338,26 @@ impl Renderer {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        if let Some(vello) = &mut self.vello {
+            let scene = vello.build_frame_scene(frame);
+            match vello.render(
+                &self.device,
+                &self.queue,
+                &scene,
+                &view,
+                self.config.width,
+                self.config.height,
+            ) {
+                Ok(()) => {
+                    self.queue.present(output);
+                    return RenderStatus::Presented;
+                }
+                Err(error) => {
+                    eprintln!("Vello render failed; returning to transitional renderer: {error}");
+                    self.vello = None;
+                }
+            }
+        }
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -435,6 +500,7 @@ fn build_vertices(frame: &FrameDescription, fonts: &FontSet) -> Vec<Vertex> {
                 scale,
                 color: line_color,
             },
+            None,
         );
     }
     for text_run in &frame.overlay_text {
@@ -449,6 +515,7 @@ fn build_vertices(frame: &FrameDescription, fonts: &FontSet) -> Vec<Vertex> {
                 scale,
                 color: to_vertex_color(text_run.color),
             },
+            None,
         );
     }
     for selection in &frame.selections {
@@ -474,6 +541,7 @@ fn build_vertices(frame: &FrameDescription, fonts: &FontSet) -> Vec<Vertex> {
                 scale,
                 color: to_vertex_color(text_run.color),
             },
+            (text_run.width > 0.0).then_some(text_run.width),
         );
     }
     for cursor in &frame.cursors {
@@ -523,6 +591,7 @@ fn append_text(
     fonts: &FontSet,
     text: &str,
     style: TextStyle,
+    width: Option<f32>,
 ) {
     if let Some(skia) = fonts.skia.as_ref()
         && skia.append_text(
@@ -530,7 +599,7 @@ fn append_text(
             frame,
             text,
             &style,
-            (text.chars().count() as f32 * 10.0).max(10.0),
+            width.unwrap_or((text.chars().count() as f32 * 10.0).max(10.0)),
         )
     {
         return;
@@ -656,11 +725,12 @@ fn surface_config(
     format: wgpu::TextureFormat,
     present_mode: wgpu::PresentMode,
     alpha_mode: wgpu::CompositeAlphaMode,
+    usage: wgpu::TextureUsages,
     width: u32,
     height: u32,
 ) -> wgpu::SurfaceConfiguration {
     wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        usage,
         format,
         color_space: wgpu::SurfaceColorSpace::Auto,
         width: width.max(1),
@@ -747,6 +817,7 @@ mod tests {
                 scale: 1.5,
                 color: [1.0, 1.0, 1.0, 1.0],
             },
+            None,
         );
 
         assert!(!vertices.is_empty());
@@ -762,6 +833,7 @@ mod tests {
                 scale: 1.5,
                 color: [1.0, 1.0, 1.0, 1.0],
             },
+            None,
         );
         assert!(!vertices.is_empty());
     }

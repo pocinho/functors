@@ -191,6 +191,7 @@ pub struct Model {
     pub state: EditorState,
     pub command_bar_open: bool,
     pub command_bar_query: String,
+    pub command_bar_selection: usize,
     pub settings_open: bool,
     pub needs_redraw: bool,
 }
@@ -212,6 +213,7 @@ impl Default for Model {
             state: EditorState::Empty,
             command_bar_open: false,
             command_bar_query: String::new(),
+            command_bar_selection: 0,
             settings_open: false,
             needs_redraw: true,
         }

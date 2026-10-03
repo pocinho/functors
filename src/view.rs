@@ -1,5 +1,7 @@
 use crate::model::{Model, Position, Selection};
+use crate::mvu::COMMAND_BAR_COMMANDS;
 use crate::syntax::{HighlightKind, SyntaxLanguage, highlight_line};
+use crate::text::{FixedTextLayoutProvider, FontId, TextLayoutProvider};
 
 const MENU_BAR_HEIGHT: f32 = 24.0;
 
@@ -91,7 +93,17 @@ impl Default for ViewConfig {
     }
 }
 
+#[allow(dead_code)]
 pub fn build_frame(model: &Model, config: ViewConfig) -> FrameDescription {
+    let mut text_provider = FixedTextLayoutProvider;
+    build_frame_with_text(model, config, &mut text_provider)
+}
+
+pub fn build_frame_with_text(
+    model: &Model,
+    config: ViewConfig,
+    text_provider: &mut dyn TextLayoutProvider,
+) -> FrameDescription {
     let viewport = Size {
         width: model.viewport.width as f32,
         height: model.viewport.height as f32,
@@ -126,6 +138,7 @@ pub fn build_frame(model: &Model, config: ViewConfig) -> FrameDescription {
                 model.viewport.horizontal_offset,
                 gutter_width,
                 config,
+                text_provider,
                 TextLayout {
                     first_line,
                     content_top: MENU_BAR_HEIGHT,
@@ -135,10 +148,14 @@ pub fn build_frame(model: &Model, config: ViewConfig) -> FrameDescription {
         .collect();
 
     let cursors = if model.cursor.line >= first_line && model.cursor.line < last_line {
+        let line_layout = text_provider.layout_single_line(
+            &model.document.line_text(model.cursor.line),
+            FontId(0),
+            config.advance,
+        );
         vec![Rect {
-            x: gutter_width
-                + (model.cursor.column as f32 - model.viewport.horizontal_offset as f32)
-                    * config.advance,
+            x: gutter_width + line_layout.cursor_x(model.cursor.column)
+                - model.viewport.horizontal_offset as f32 * config.advance,
             y: MENU_BAR_HEIGHT + (model.cursor.line - first_line) as f32 * config.line_height,
             width: 2.0,
             height: config.line_height,
@@ -155,6 +172,7 @@ pub fn build_frame(model: &Model, config: ViewConfig) -> FrameDescription {
         first_line,
         last_line,
         MENU_BAR_HEIGHT,
+        text_provider,
     );
     let (vertical_scrollbar, horizontal_scrollbar) =
         scrollbars(model, config, gutter_width, MENU_BAR_HEIGHT);
@@ -168,7 +186,7 @@ pub fn build_frame(model: &Model, config: ViewConfig) -> FrameDescription {
         x: 120.0,
         y: 32.0,
         width: (viewport.width - 160.0).max(180.0),
-        height: 28.0,
+        height: 28.0 + COMMAND_BAR_COMMANDS.len() as f32 * 18.0,
     });
     let settings_panel = model.settings_open.then_some(Rect {
         x: 120.0,
@@ -195,6 +213,29 @@ pub fn build_frame(model: &Model, config: ViewConfig) -> FrameDescription {
             height: 0.0,
             color: Color(245, 210, 120, 255),
         });
+        for (index, command) in COMMAND_BAR_COMMANDS.iter().enumerate() {
+            overlay_text.push(TextRun {
+                line: 0,
+                text: format!(
+                    "{}{}",
+                    if index == model.command_bar_selection {
+                        "> "
+                    } else {
+                        "  "
+                    },
+                    command
+                ),
+                x: 132.0,
+                y: 62.0 + index as f32 * 18.0,
+                width: 0.0,
+                height: 0.0,
+                color: if index == model.command_bar_selection {
+                    Color(245, 210, 120, 255)
+                } else {
+                    Color(220, 220, 220, 255)
+                },
+            });
+        }
     }
     if model.settings_open {
         overlay_text.push(TextRun {
@@ -298,6 +339,27 @@ fn scrollbars(
     (vertical, horizontal)
 }
 
+pub fn scroll_limits(model: &Model, config: ViewConfig) -> (usize, usize) {
+    let viewport = Size {
+        width: model.viewport.width as f32,
+        height: model.viewport.height as f32,
+    };
+    let content_top = MENU_BAR_HEIGHT;
+    let visible_lines =
+        visible_line_count((viewport.height - content_top).max(0.0), config.line_height);
+    let vertical = model.document.line_count().saturating_sub(visible_lines);
+    let gutter_width = gutter_width(model.document.line_count(), config);
+    let visible_columns = ((viewport.width - gutter_width - config.scrollbar_size).max(0.0)
+        / config.advance.max(1.0)) as usize;
+    let longest_line = (0..model.document.line_count())
+        .map(|line| model.document.line_len(line))
+        .max()
+        .unwrap_or(0);
+    let horizontal = longest_line.saturating_sub(visible_columns);
+
+    (vertical, horizontal)
+}
+
 fn text_runs_for_line(
     line: usize,
     text: &str,
@@ -305,9 +367,11 @@ fn text_runs_for_line(
     horizontal_offset: usize,
     gutter_width: f32,
     config: ViewConfig,
+    text_provider: &mut dyn TextLayoutProvider,
     layout: TextLayout,
 ) -> Vec<TextRun> {
     let character_count = text.chars().count();
+    let line_layout = text_provider.layout_single_line(text, FontId(0), config.advance);
     let spans = highlight_line(text, language);
     let mut boundaries = vec![0, character_count];
     boundaries.extend(spans.iter().flat_map(|span| [span.start, span.end]));
@@ -322,6 +386,7 @@ fn text_runs_for_line(
             let visible_start = start.max(horizontal_offset);
             let visible_end = end.max(horizontal_offset);
             (visible_end > visible_start).then(|| {
+                let bounds = line_layout.selection_bounds(visible_start, visible_end);
                 let run_text = text
                     .chars()
                     .skip(visible_start)
@@ -334,10 +399,10 @@ fn text_runs_for_line(
                 TextRun {
                     line,
                     text: run_text,
-                    x: gutter_width + (visible_start - horizontal_offset) as f32 * config.advance,
+                    x: gutter_width + bounds.x - horizontal_offset as f32 * config.advance,
                     y: layout.content_top + (line - layout.first_line) as f32 * config.line_height,
-                    width: (visible_end - visible_start) as f32 * config.advance,
-                    height: config.line_height,
+                    width: bounds.width,
+                    height: bounds.height,
                     color: color_for_highlight(kind),
                 }
             })
@@ -368,6 +433,7 @@ fn selection_rects(
     first_line: usize,
     last_line: usize,
     content_top: f32,
+    text_provider: &mut dyn TextLayoutProvider,
 ) -> Vec<Rect> {
     let Some(selection) = selection else {
         return Vec::new();
@@ -391,6 +457,11 @@ fn selection_rects(
 
     (first_selected_line..=last_selected_line)
         .filter_map(|line| {
+            let line_layout = text_provider.layout_single_line(
+                &model.document.line_text(line),
+                FontId(0),
+                config.advance,
+            );
             let line_start = if line == start.line { start.column } else { 0 };
             let line_end = if line == end.line {
                 end.column
@@ -399,24 +470,45 @@ fn selection_rects(
             };
             let visible_start = line_start.max(horizontal_start).min(horizontal_end);
             let visible_end = line_end.max(horizontal_start).min(horizontal_end);
-            (visible_end > visible_start).then_some(Rect {
-                x: gutter_width + (visible_start - horizontal_start) as f32 * config.advance,
-                y: content_top + (line - first_line) as f32 * config.line_height,
-                width: (visible_end - visible_start) as f32 * config.advance,
-                height: config.line_height,
+            (visible_end > visible_start).then_some({
+                let bounds = line_layout.selection_bounds(visible_start, visible_end);
+                Rect {
+                    x: gutter_width + bounds.x - horizontal_start as f32 * config.advance,
+                    y: content_top + (line - first_line) as f32 * config.line_height,
+                    width: bounds.width,
+                    height: bounds.height,
+                }
             })
         })
         .collect()
 }
 
+#[allow(dead_code)]
 pub fn position_at_point(model: &Model, config: ViewConfig, x: f32, y: f32) -> Position {
+    let mut text_provider = FixedTextLayoutProvider;
+    position_at_point_with_text(model, config, x, y, &mut text_provider)
+}
+
+pub fn position_at_point_with_text(
+    model: &Model,
+    config: ViewConfig,
+    x: f32,
+    y: f32,
+    text_provider: &mut dyn TextLayoutProvider,
+) -> Position {
     let visible_line_count = model.document.line_count().max(1);
     let line = model.viewport.vertical_offset
         + ((y - MENU_BAR_HEIGHT).max(0.0) / config.line_height.max(1.0)).floor() as usize;
     let line = line.min(visible_line_count - 1);
     let gutter_width = gutter_width(model.document.line_count(), config);
-    let column = ((x - gutter_width).max(0.0) / config.advance.max(1.0)).floor() as usize
-        + model.viewport.horizontal_offset;
+    let line_layout = text_provider.layout_single_line(
+        &model.document.line_text(line),
+        FontId(0),
+        config.advance,
+    );
+    let column = line_layout.hit_test(
+        (x - gutter_width).max(0.0) + model.viewport.horizontal_offset as f32 * config.advance,
+    );
 
     model.document.clamp_position(Position { line, column })
 }

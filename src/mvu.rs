@@ -19,6 +19,8 @@ pub enum Key {
     Escape,
 }
 
+pub const COMMAND_BAR_COMMANDS: [&str; 4] = ["Open File", "Open Workspace", "Save", "Settings"];
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
     WindowResized { width: u32, height: u32 },
@@ -78,6 +80,7 @@ pub fn update(mut model: Model, message: Message) -> Transition {
         Message::TextInput(text) => {
             if model.command_bar_open {
                 model.command_bar_query.push_str(&text);
+                model.command_bar_selection = 0;
             } else {
                 consume_selection(&mut model);
                 model.document.insert_text(&mut model.cursor, &text);
@@ -107,9 +110,16 @@ pub fn update(mut model: Model, message: Message) -> Transition {
         Message::KeyPressed(key) => {
             if model.command_bar_open && key == Key::Backspace {
                 model.command_bar_query.pop();
+                model.command_bar_selection = 0;
             } else if model.command_bar_open && key == Key::Escape {
                 model.command_bar_open = false;
                 model.command_bar_query.clear();
+                model.command_bar_selection = 0;
+            } else if model.command_bar_open && key == Key::Up {
+                model.command_bar_selection = model.command_bar_selection.saturating_sub(1);
+            } else if model.command_bar_open && key == Key::Down {
+                model.command_bar_selection = (model.command_bar_selection + 1)
+                    .min(COMMAND_BAR_COMMANDS.len().saturating_sub(1));
             } else if model.command_bar_open && key == Key::Enter {
                 submit_command_bar(&mut model, &mut commands);
             } else if !model.command_bar_open {
@@ -125,13 +135,18 @@ pub fn update(mut model: Model, message: Message) -> Transition {
         }
         Message::ToggleCommandBar => {
             model.command_bar_open = !model.command_bar_open;
+            if model.command_bar_open {
+                model.settings_open = false;
+            }
             model.command_bar_query.clear();
+            model.command_bar_selection = 0;
             model.needs_redraw = true;
             commands.push(Command::RequestRedraw);
         }
         Message::OpenSettings => {
             model.command_bar_open = false;
             model.command_bar_query.clear();
+            model.command_bar_selection = 0;
             model.settings_open = true;
             model.needs_redraw = true;
             commands.push(Command::RequestRedraw);
@@ -237,8 +252,14 @@ pub fn update(mut model: Model, message: Message) -> Transition {
 
 fn submit_command_bar(model: &mut Model, commands: &mut Vec<Command>) {
     let query = model.command_bar_query.trim().to_ascii_lowercase();
+    let query = if query.is_empty() {
+        COMMAND_BAR_COMMANDS[model.command_bar_selection].to_ascii_lowercase()
+    } else {
+        query
+    };
     model.command_bar_open = false;
     model.command_bar_query.clear();
+    model.command_bar_selection = 0;
     match query.as_str() {
         "settings" | "open settings" => model.settings_open = true,
         "open workspace" | "workspace" => commands.push(Command::OpenWorkspacePicker),
@@ -388,6 +409,51 @@ mod tests {
         assert_eq!(transition.model.cursor, Position { line: 0, column: 5 });
         assert!(transition.model.document.dirty);
         assert_eq!(transition.commands, vec![Command::RequestRedraw]);
+    }
+
+    #[test]
+    fn command_bar_navigates_commands_and_submits_the_selected_item() {
+        let model = update(Model::default(), Message::ToggleCommandBar).model;
+        let model = update(model, Message::KeyPressed(Key::Down)).model;
+        assert_eq!(model.command_bar_selection, 1);
+
+        let transition = update(model, Message::KeyPressed(Key::Enter));
+
+        assert!(!transition.model.command_bar_open);
+        assert_eq!(transition.model.command_bar_selection, 0);
+        assert_eq!(
+            transition.commands,
+            vec![Command::OpenWorkspacePicker, Command::RequestRedraw]
+        );
+    }
+
+    #[test]
+    fn command_bar_escape_clears_query_and_selection() {
+        let model = update(Model::default(), Message::ToggleCommandBar).model;
+        let model = update(model, Message::TextInput("save".into())).model;
+        let model = update(model, Message::KeyPressed(Key::Down)).model;
+
+        let transition = update(model, Message::KeyPressed(Key::Escape));
+
+        assert!(!transition.model.command_bar_open);
+        assert!(transition.model.command_bar_query.is_empty());
+        assert_eq!(transition.model.command_bar_selection, 0);
+    }
+
+    #[test]
+    fn menu_overlays_are_mutually_exclusive() {
+        let settings = update(Model::default(), Message::OpenSettings);
+        assert!(settings.model.settings_open);
+        assert!(!settings.model.command_bar_open);
+        assert_eq!(settings.commands, vec![Command::RequestRedraw]);
+
+        let command_bar = update(settings.model, Message::ToggleCommandBar);
+        assert!(command_bar.model.command_bar_open);
+        assert!(!command_bar.model.settings_open);
+
+        let settings_again = update(command_bar.model, Message::OpenSettings);
+        assert!(!settings_again.model.command_bar_open);
+        assert!(settings_again.model.settings_open);
     }
 
     #[test]

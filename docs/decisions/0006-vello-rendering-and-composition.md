@@ -45,6 +45,14 @@ Vello text API details, font fallback, color fonts, clipping, render-target
 formats, and performance must be verified against the pinned crate version on
 Windows before removing the transitional Skia and fontdue dependencies.
 
+The initial dependency pin is Vello 0.11.0 with the existing WGPU 30.0.1
+line. The live renderer now prefers Vello when the adapter is not CPU-only and
+the selected surface format allows storage binding. It selects a compatible
+surface format before configuration and otherwise leaves the transitional
+Skia/fontdue renderer active. Surface recovery, antialiasing behavior, GPU
+limitations, and visual output still require broader validation before Vello
+is considered fully production-ready.
+
 ## Consequences
 
 - `FrameDescription` remains the headless-testable contract between view and

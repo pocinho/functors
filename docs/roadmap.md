@@ -47,17 +47,17 @@ and presentation foundations.
 **Goal:** Establish the Functors-owned text and widget contracts before adding
 backend-specific rendering behavior.
 
-- [ ] Create the initial `functors-text` module with backend-neutral shaped
+- [x] Create the initial `functors-text` module with backend-neutral shaped
   runs, font identity, advances, glyph positions, and bounds.
-- [ ] Evaluate Parley, Fontique, and Swash for shaping, fallback, emoji, tabs,
+- [x] Evaluate Parley, Fontique, and Swash for shaping, fallback, emoji, tabs,
   IME preedit, and cursor/selection geometry.
 - [ ] Add deterministic text tests for Unicode, combining marks, fallback
   scripts, emoji, multiline ranges, clipping, and fractional positions.
-- [ ] Create the initial `functors-widgets` module with semantic widget
+- [x] Create the initial `functors-widgets` module with semantic widget
   identity, layout bounds, hit testing, focus order, and widget states.
 - [ ] Add scrollbar thumb dragging and complete menu command behavior through
   the widget hit-testing and focus model.
-- [ ] Define theme tokens and backend-neutral paint descriptions for panels,
+- [x] Define theme tokens and backend-neutral paint descriptions for panels,
   menus, command bars, scrollbars, and status surfaces.
 - [ ] Keep document edits, workspace state, commands, and diagnostics in the
   MVU model; keep only presentation state in widgets.
@@ -77,12 +77,15 @@ sequence and checkpoints.
 validated Vello scene pipeline while keeping the MVU, text, widget, and
 `FrameDescription` contracts stable.
 
-- [ ] Pin Vello and compatible WGPU versions; document required features,
+- [x] Pin Vello and compatible WGPU versions; document required features,
   surface formats, antialiasing, and Windows GPU limitations.
+  The current pin is Vello 0.11.0 with WGPU 30.0.1; scene and surface
+  validation remain follow-up work.
 - [ ] Render the existing `FrameDescription` geometry through Vello, including
   the background, panels, gutter, selections, cursors, and scrollbars.
-- [ ] Translate `functors-widgets` paint descriptions into Vello scene layers
-  without leaking Vello or WGPU types into the widget API.
+- [x] Translate `functors-widgets` paint descriptions into Vello scene layers
+  without leaking Vello or WGPU types into the widget API. The isolated scene
+  adapter currently covers all existing paint variants.
 - [ ] Prove one Vello-rendered text line from `functors-text` with ASCII,
   combining marks, fallback text, emoji, clipping, and fractional
   positioning.

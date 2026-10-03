@@ -45,6 +45,64 @@ clocks, or platform event types. Backend-specific conversion belongs in the
 renderer adapter. Floem remains a reference implementation and optional proof-
 of-concept integration, not a required runtime dependency.
 
+## Boundary Freeze
+
+The Phase 1 presentation boundary is frozen as follows:
+
+- `FrameDescription` remains the inspectable view-to-renderer contract. Its
+  viewport, background, gutter, line numbers, text runs, selections, cursors,
+  scrollbars, menu bar, panels, and overlay text remain valid presentation
+  outputs. The renderer consumes these outputs and does not inspect `Model`.
+- Model source positions use Unicode scalar offsets within a line. UTF-8 byte
+  offsets and grapheme-cluster movement are separate coordinate systems and
+  must not be silently substituted for scalar columns. The text layer may add
+  explicit mappings when grapheme-aware editing is introduced.
+- Text and frame geometry use logical floating-point coordinates. Physical
+  pixel conversion and device-scale handling belong to the renderer/platform
+  boundary; they must not enter Model, MVU, or backend-neutral text/widget
+  contracts.
+- Platform events are translated into semantic messages before update logic.
+  The current message categories include resize, modifiers, keys, committed
+  text, scrolling, command-bar and settings activation, pointer press/drag,
+  file/workspace requests, and effect results. Future focus, menu activation,
+  scrollbar drag, and command submission messages must follow the same rule.
+- Persistent document, cursor, selection, viewport, command, file, and
+  workspace state remains in Model and is changed by pure MVU transitions.
+  Hover, focus, pointer capture, measurement, and other presentation-only
+  state belongs to the widget layer unless it changes domain semantics.
+- Text and widget contracts remain independent of WGPU, Vello, winit/window
+  handles, filesystem APIs, and clocks. Fixed-width assumptions in the current
+  view are migration concerns, not new ownership boundaries.
+
+This freeze is a review checkpoint, not a promise that the current fixed-width
+layout is production text shaping. Shaping, fallback, grapheme mapping, and
+physical-pixel conversion may evolve behind these contracts.
+
+## Shaping Stack Evaluation
+
+The initial evaluation uses the pinned local toolchain (`rustc 1.99.0`) and
+the current Vello direction:
+
+| Component | Current version | Role | Decision |
+| --- | --- | --- | --- |
+| Parley | 0.11.1 | Rich text shaping, layout, line breaking, bidi, and positioned glyph runs | Select as the first high-level `functors-text` integration surface |
+| Fontique | 0.11.1 | Font enumeration, matching, source caching, and fallback selection | Use behind the text resource boundary; Parley already integrates it |
+| Swash | 0.2.10 | Lower-level OpenType shaping, scaling, and glyph rendering | Defer direct use until the Vello text path demonstrates a concrete need |
+
+Parley and Fontique both declare Rust 1.88 as their minimum version and are
+compatible with the current toolchain. Parley's default system feature brings
+platform font discovery through Fontique, so that dependency must remain behind
+the backend-neutral catalog and must not appear in Model or MVU APIs. Swash is
+valuable as a lower-level fallback for renderer-specific control, but adopting
+it first would require Functors to own more shaping, fallback, and cache policy
+before the Vello text path is pinned.
+
+The first production-shaped prototype should therefore add Parley, construct
+shared font and layout contexts outside Model, and translate its layout output
+into the existing backend-neutral glyph and geometry types. The provisional
+scalar `SingleLineLayout` remains useful as a deterministic test fixture until
+that adapter has equivalent cursor, selection, fallback, emoji, and IME tests.
+
 ## `functors-text` Responsibilities
 
 `functors-text` must provide backend-neutral, testable text behavior:

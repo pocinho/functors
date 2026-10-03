@@ -5,6 +5,23 @@ use winit::{
 
 use crate::mvu::{Key, Message};
 use crate::view::{FrameDescription, Rect};
+use crate::widgets::{
+    AccessibilityInfo, Bounds, WidgetDescription, WidgetId, WidgetState, WidgetTree,
+};
+
+const MENU_FILE: WidgetId = WidgetId(1);
+const MENU_VIEW: WidgetId = WidgetId(2);
+const MENU_SETTINGS: WidgetId = WidgetId(3);
+const VERTICAL_SCROLL_TRACK: WidgetId = WidgetId(10);
+const VERTICAL_SCROLL_THUMB: WidgetId = WidgetId(11);
+const HORIZONTAL_SCROLL_TRACK: WidgetId = WidgetId(12);
+const HORIZONTAL_SCROLL_THUMB: WidgetId = WidgetId(13);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScrollbarAxis {
+    Vertical,
+    Horizontal,
+}
 
 pub fn key_message(event: &KeyEvent, control_down: bool) -> Option<Message> {
     if !event.state.is_pressed() {
@@ -83,46 +100,97 @@ pub fn text_message(text: String) -> Option<Message> {
 }
 
 pub fn menu_message(x: f32, y: f32) -> Option<Message> {
-    if !(0.0..24.0).contains(&y) {
-        return None;
+    let mut widgets = WidgetTree::default();
+    for (id, x_start, width) in [
+        (MENU_FILE, 0.0, 70.0),
+        (MENU_VIEW, 70.0, 80.0),
+        (MENU_SETTINGS, 150.0, 110.0),
+    ] {
+        widgets.push(widget(id, x_start, 0.0, width, 24.0, 0));
     }
 
-    match x {
-        0.0..70.0 | 70.0..150.0 => Some(Message::ToggleCommandBar),
-        150.0..260.0 => Some(Message::OpenSettings),
+    match widgets.hit_test(x, y) {
+        Some(MENU_FILE) => Some(Message::OpenFilePickerRequested),
+        Some(MENU_VIEW) => Some(Message::ToggleCommandBar),
+        Some(MENU_SETTINGS) => Some(Message::OpenSettings),
         _ => None,
     }
 }
 
 pub fn scrollbar_message(frame: &FrameDescription, x: f32, y: f32) -> Option<Message> {
-    if let Some(scrollbar) = frame.vertical_scrollbar.as_ref()
-        && contains(scrollbar.track, x, y)
-        && !contains(scrollbar.thumb, x, y)
-    {
-        return Some(Message::Scrolled {
-            vertical: if y < scrollbar.thumb.y { -10 } else { 10 },
-            horizontal: 0,
-        });
+    match scrollbar_widgets(frame).hit_test(x, y) {
+        Some(VERTICAL_SCROLL_TRACK) => {
+            let scrollbar = frame.vertical_scrollbar.as_ref()?;
+            Some(Message::Scrolled {
+                vertical: if y < scrollbar.thumb.y { -10 } else { 10 },
+                horizontal: 0,
+            })
+        }
+        Some(HORIZONTAL_SCROLL_TRACK) => {
+            let scrollbar = frame.horizontal_scrollbar.as_ref()?;
+            Some(Message::Scrolled {
+                vertical: 0,
+                horizontal: if x < scrollbar.thumb.x { -8 } else { 8 },
+            })
+        }
+        _ => None,
     }
-    if let Some(scrollbar) = frame.horizontal_scrollbar.as_ref()
-        && contains(scrollbar.track, x, y)
-        && !contains(scrollbar.thumb, x, y)
-    {
-        return Some(Message::Scrolled {
-            vertical: 0,
-            horizontal: if x < scrollbar.thumb.x { -8 } else { 8 },
-        });
-    }
-    None
 }
 
-fn contains(rect: Rect, x: f32, y: f32) -> bool {
-    x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height
+pub fn scrollbar_thumb_axis(frame: &FrameDescription, x: f32, y: f32) -> Option<ScrollbarAxis> {
+    match scrollbar_widgets(frame).hit_test(x, y) {
+        Some(VERTICAL_SCROLL_THUMB) => Some(ScrollbarAxis::Vertical),
+        Some(HORIZONTAL_SCROLL_THUMB) => Some(ScrollbarAxis::Horizontal),
+        _ => None,
+    }
+}
+
+fn scrollbar_widgets(frame: &FrameDescription) -> WidgetTree {
+    let mut widgets = WidgetTree::default();
+    if let Some(scrollbar) = frame.vertical_scrollbar.as_ref() {
+        widgets.push(rect_widget(VERTICAL_SCROLL_TRACK, scrollbar.track, 0));
+        widgets.push(rect_widget(VERTICAL_SCROLL_THUMB, scrollbar.thumb, 1));
+    }
+    if let Some(scrollbar) = frame.horizontal_scrollbar.as_ref() {
+        widgets.push(rect_widget(HORIZONTAL_SCROLL_TRACK, scrollbar.track, 0));
+        widgets.push(rect_widget(HORIZONTAL_SCROLL_THUMB, scrollbar.thumb, 1));
+    }
+    widgets
+}
+
+fn widget(
+    id: WidgetId,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    z_index: i32,
+) -> WidgetDescription {
+    WidgetDescription {
+        id,
+        bounds: Bounds {
+            x,
+            y,
+            width,
+            height,
+        },
+        state: WidgetState::empty(),
+        z_index,
+        focus_order: None,
+        accessibility: AccessibilityInfo::default(),
+    }
+}
+
+fn rect_widget(id: WidgetId, rect: Rect, z_index: i32) -> WidgetDescription {
+    widget(id, rect.x, rect.y, rect.width, rect.height, z_index)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{is_shortcut, menu_message, named_key_message, scrollbar_message, text_message};
+    use super::{
+        ScrollbarAxis, is_shortcut, menu_message, named_key_message, scrollbar_message,
+        scrollbar_thumb_axis, text_message,
+    };
     use crate::mvu::{Key, Message};
     use crate::view::{Color, FrameDescription, Rect, Scrollbar, Size};
     use winit::keyboard::NamedKey;
@@ -163,7 +231,10 @@ mod tests {
 
     #[test]
     fn menu_regions_dispatch_semantic_actions() {
-        assert_eq!(menu_message(20.0, 10.0), Some(Message::ToggleCommandBar));
+        assert_eq!(
+            menu_message(20.0, 10.0),
+            Some(Message::OpenFilePickerRequested)
+        );
         assert_eq!(menu_message(110.0, 10.0), Some(Message::ToggleCommandBar));
         assert_eq!(menu_message(200.0, 10.0), Some(Message::OpenSettings));
         assert_eq!(menu_message(200.0, 30.0), None);
@@ -227,5 +298,10 @@ mod tests {
             })
         );
         assert_eq!(scrollbar_message(&frame, 95.0, 40.0), None);
+        assert_eq!(
+            scrollbar_thumb_axis(&frame, 95.0, 40.0),
+            Some(ScrollbarAxis::Vertical)
+        );
+        assert_eq!(scrollbar_thumb_axis(&frame, 95.0, 10.0), None);
     }
 }

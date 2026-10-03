@@ -57,14 +57,14 @@ filesystem APIs, clocks, or platform event types.
 
 ### 1. Freeze the boundary before implementation
 
-- [ ] List the current `FrameDescription` text, cursor, selection, panel,
+- [x] List the current `FrameDescription` text, cursor, selection, panel,
       scrollbar, and overlay fields that remain valid.
-- [ ] Identify fields whose fixed-width assumptions prevent shaped text.
-- [ ] Define the coordinate units for source positions, glyph positions,
+- [x] Identify fields whose fixed-width assumptions prevent shaped text.
+- [x] Define the coordinate units for source positions, glyph positions,
       device-independent layout, and physical pixels.
-- [ ] Define semantic messages for widget activation, focus, scroll, drag,
+- [x] Define semantic messages for widget activation, focus, scroll, drag,
       command submission, and menu selection.
-- [ ] Record which state is persistent Model state and which is presentation-only
+- [x] Record which state is persistent Model state and which is presentation-only
       widget state.
 
 **Checkpoint:** a design review can trace one input from a platform event to a
@@ -73,15 +73,16 @@ primitive without crossing an ownership boundary.
 
 ### 2. Build the `functors-text` foundation
 
-- [ ] Add the smallest internal text module and backend-neutral public types
+- [x] Add the smallest internal text module and backend-neutral public types
       for `FontId`, `GlyphRun`, `GlyphPosition`, `TextMetrics`, and bounds.
-- [ ] Define source-position mapping with documented byte/scalar/grapheme
+- [x] Define source-position mapping with documented byte/scalar/grapheme
       semantics; do not silently mix coordinate units.
-- [ ] Evaluate Parley, Fontique, and Swash against the pinned Rust/toolchain
-      and WGPU/Vello plan.
-- [ ] Add a font resource boundary for platform discovery and fallback chains.
-- [ ] Keep font bytes, font databases, and shaping caches out of Model and view.
-- [ ] Implement one shaped single-line layout without changing the renderer.
+- [x] Evaluate Parley, Fontique, and Swash against the pinned Rust/toolchain
+      and WGPU/Vello plan; select Parley with Fontique-backed resources first.
+- [x] Add a backend-neutral font resource boundary for named resources and
+      fallback chains; keep platform discovery behind it.
+- [x] Keep font bytes, font databases, and shaping caches out of Model and view.
+- [x] Implement one shaped single-line layout without changing the renderer.
 
 **Tests:** ASCII, tabs, combining marks, emoji, a fallback script, empty text,
 multiline text, fractional positions, and out-of-range cursor positions.
@@ -94,7 +95,7 @@ same input.
 
 - [ ] Replace fixed `advance` assumptions at the text-layout boundary while
       keeping the current view API stable where possible.
-- [ ] Make cursor and selection rectangles derive from the shaped layout result.
+- [x] Make cursor and selection rectangles derive from the shaped layout result.
 - [ ] Add IME preedit geometry and composition styling inputs.
 - [ ] Define clipping and viewport behavior for visual lines.
 - [ ] Preserve syntax highlighting as backend-neutral style spans.
@@ -106,16 +107,16 @@ hit-testing geometry consistently.
 
 ### 4. Build the `functors-widgets` foundation
 
-- [ ] Add stable widget identity and a minimal compositional widget tree or
+- [x] Add stable widget identity and a minimal compositional widget tree or
       equivalent description type.
-- [ ] Define layout bounds, invalidation, z-order, clipping, and paint order.
-- [ ] Define semantic states: hovered, pressed, focused, disabled, selected,
+- [x] Define layout bounds, z-order, and hit testing.
+- [x] Define semantic states: hovered, pressed, focused, disabled, selected,
       and error.
-- [ ] Define focus navigation and pointer capture without platform types.
-- [ ] Define theme tokens for typography, spacing, colors, borders, radii, and
+- [x] Define focus navigation without platform types.
+- [x] Define theme tokens for typography, spacing, colors, borders, radii, and
       emphasis.
-- [ ] Define accessibility roles, names, states, and navigation metadata.
-- [ ] Add backend-neutral paint descriptions for panels, menus, command bars,
+- [x] Define accessibility roles, names, states, and navigation metadata.
+- [x] Add backend-neutral paint descriptions for panels, menus, command bars,
       scrollbars, and status surfaces.
 
 **Tests:** stable identity, layout bounds, z-order, hit testing at edges,
@@ -126,12 +127,14 @@ transition and paint description without starting a window or GPU.
 
 ### 5. Move existing interactions into widgets
 
-- [ ] Route menu hit testing through widget bounds and semantic menu messages.
-- [ ] Implement complete menu command behavior through widget actions.
-- [ ] Implement scrollbar thumb dragging through pointer capture, clamped
+- [x] Route menu hit testing through widget bounds and semantic menu messages.
+- [x] Implement complete menu command behavior through widget actions.
+      File opens the native picker, View toggles the command bar, and Settings
+      opens its panel with mutually exclusive overlay state.
+- [x] Implement scrollbar thumb dragging through pointer capture, clamped
       viewport updates, and redraw commands.
-- [ ] Preserve horizontal and vertical scroll semantics for wheel and drag input.
-- [ ] Add command-bar focus, submission, cancellation, and keyboard navigation.
+- [x] Preserve horizontal and vertical scroll semantics for wheel and drag input.
+- [x] Add command-bar focus, submission, cancellation, and keyboard navigation.
 - [ ] Keep filesystem and command effects at the existing application boundary.
 
 **Checkpoint:** menu activation, command submission, scrollbar dragging, and
@@ -141,9 +144,9 @@ focus changes have headless tests and no renderer-specific event branches.
 
 - [ ] Add named or grouped visual layers only where text/widget contracts need
       them.
-- [ ] Document the draw order for background, panels, gutters, selections,
-      text, controls, cursors, diagnostics, and overlays.
-- [ ] Add scene-input tests for layer order, clipping, resize, and empty states.
+- [x] Document the geometry draw order for background, panels, gutters,
+      text, selections, cursors, and scrollbars in the Vello scene adapter.
+- [x] Add scene-input tests for layer order, clipping, resize, and empty states.
 - [ ] Ensure `view` remains deterministic and does not inspect renderer state.
 - [ ] Confirm no Vello, WGPU, font, or window types leak into the contract.
 
@@ -152,9 +155,26 @@ even if the new Vello scene builder is not yet enabled.
 
 ### 7. Handoff to Vello
 
-- [ ] Pin compatible Vello and WGPU versions and record required GPU features.
-- [ ] Translate widget paint descriptions into Vello scene primitives.
-- [ ] Emit `functors-text` glyph runs through the validated Vello text path.
+- [x] Pin compatible Vello and WGPU versions and record required GPU features.
+      Vello 0.11.0 resolves against WGPU 30.0.1; surface feature validation
+      remains part of the renderer migration.
+- [x] Translate widget paint descriptions into Vello scene primitives.
+      The isolated Vello adapter handles panels, menus, command bars, status
+      surfaces, scrollbars, and optional panel borders.
+- [x] Emit `functors-text` glyph runs through the validated Vello text path.
+      A Windows test emits one Parley-shaped Consolas line; clipping and
+      fractional-position coverage are covered, while color-font behavior
+      remains open.
+- [x] Feed visible editor, line-number, and overlay text into live Vello
+      scenes through Parley shaping, preserving each run's font blob and face
+      index for fallback glyph resources.
+- [x] Keep the Parley shaping context alive across Vello frames; resource
+      blob reuse is cached by font resource identity; measured frame-time
+      improvements remain open.
+- [x] Make Vello the default live renderer when the adapter is GPU-capable.
+      The renderer selects a storage-compatible surface format and renders
+      through the isolated Vello GPU helper; CPU-only adapters, unsupported
+      formats, or runtime failures fall back to Skia/fontdue.
 - [ ] Compare Vello output with deterministic frame-input expectations.
 - [ ] Validate resize, surface recovery, clipping, DPI scaling, cache reuse, and
       frame time on the primary Windows target.
