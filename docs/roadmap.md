@@ -29,9 +29,9 @@
 - Create basic workspace structure (open folder, list files)  
 - Add file open/save support  
 
-**Outcome:** Core MVU implementation complete. The usability gate remains open
-until richer menu interaction, scrollbar dragging, and a complete
-command/settings workflow are in place.
+**Outcome:** Core MVU implementation complete. Richer menu interaction,
+scrollbar dragging, and complete command behavior are deferred to the widget
+and presentation foundations.
 
 ### Phase 1 usability extension
 
@@ -41,13 +41,62 @@ command/settings workflow are in place.
 - [x] Clickable menu strip and `Ctrl+K` command bar shell.
 - [x] Settings command opens a visible settings surface.
 - [x] Integrate a real font rasterizer with Consolas and Segoe UI Emoji fallback.
-- [x] Adopt Skia for production cross-platform text shaping, emoji rendering,
-      and diagnostics overlays.
-- [ ] Add scrollbar thumb dragging and complete menu command behavior.
 
-Phase 2 should not begin until this extension is complete. The bitmap/fontdue
-path remains an intermediate fallback. Native color emoji validation and richer
-visual programming diagnostics remain follow-up work on the Skia foundation.
+### Phase 1 presentation foundations
+
+**Goal:** Establish the Functors-owned text and widget contracts before adding
+backend-specific rendering behavior.
+
+- [ ] Create the initial `functors-text` module with backend-neutral shaped
+  runs, font identity, advances, glyph positions, and bounds.
+- [ ] Evaluate Parley, Fontique, and Swash for shaping, fallback, emoji, tabs,
+  IME preedit, and cursor/selection geometry.
+- [ ] Add deterministic text tests for Unicode, combining marks, fallback
+  scripts, emoji, multiline ranges, clipping, and fractional positions.
+- [ ] Create the initial `functors-widgets` module with semantic widget
+  identity, layout bounds, hit testing, focus order, and widget states.
+- [ ] Add scrollbar thumb dragging and complete menu command behavior through
+  the widget hit-testing and focus model.
+- [ ] Define theme tokens and backend-neutral paint descriptions for panels,
+  menus, command bars, scrollbars, and status surfaces.
+- [ ] Keep document edits, workspace state, commands, and diagnostics in the
+  MVU model; keep only presentation state in widgets.
+- [ ] Extend `FrameDescription` only where these contracts require new visual
+  layers, preserving deterministic headless tests.
+
+Separate `functors-text` and `functors-widgets` crates are deferred until the
+modules have stable public facades, independent tests, and distinct dependency
+needs. Floem remains a reference implementation for these boundaries rather
+than a required runtime dependency. See the [Phase 1 presentation foundations
+todo](notes/todos/phase_1_todo_presentation_foundations.md) for the executable
+sequence and checkpoints.
+
+### Phase 1 Vello rendering
+
+**Goal:** Move the renderer from the transitional WGPU pixel-quad path to a
+validated Vello scene pipeline while keeping the MVU, text, widget, and
+`FrameDescription` contracts stable.
+
+- [ ] Pin Vello and compatible WGPU versions; document required features,
+  surface formats, antialiasing, and Windows GPU limitations.
+- [ ] Render the existing `FrameDescription` geometry through Vello, including
+  the background, panels, gutter, selections, cursors, and scrollbars.
+- [ ] Translate `functors-widgets` paint descriptions into Vello scene layers
+  without leaking Vello or WGPU types into the widget API.
+- [ ] Prove one Vello-rendered text line from `functors-text` with ASCII,
+  combining marks, fallback text, emoji, clipping, and fractional
+  positioning.
+- [ ] Keep cursor and selection geometry aligned with shaped glyph positions.
+- [ ] Add headless layout and scene-input tests for draw order, clipping, and
+  resize-sensitive geometry.
+- [ ] Measure frame time and cache reuse at 100%, 150%, and 200% Windows DPI.
+- [ ] Remove Skia and fontdue only after Vello text quality, fallback behavior,
+  surface recovery, and performance meet the rendering acceptance criteria.
+
+Phase 2 should not begin until the presentation foundations and rendering
+improvements have reached their exit criteria. Notebook cells may be designed
+in parallel, but they should not deepen the transitional text or pixel-quad
+rendering paths.
 
 ---
 
@@ -160,5 +209,7 @@ visual programming diagnostics remain follow-up work on the Skia foundation.
 ---
 
 ## **Status**
-Phase 1 is complete. This roadmap remains a living plan and will evolve as
-notebook, execution, agent, plugin, and workspace UX capabilities are added.
+The Phase 1 MVU/editor baseline is complete. The Phase 1 usability and
+rendering extensions remain open gates before Phase 2. This roadmap remains a
+living plan and will evolve as notebook, execution, agent, plugin, and
+workspace UX capabilities are added.

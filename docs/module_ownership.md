@@ -23,6 +23,8 @@ filesystem APIs, clocks, or network clients.
 | `mvu` | messages, deterministic transitions, declared commands | Winit, WGPU, filesystem, network, or clock access |
 | `model` / document | positions, ranges, selections, edits, cursor and document invariants | platform event types or GPU resources |
 | `view` / layout | deterministic frame descriptions, hit testing, geometry | GPU calls, window handles, or domain-side mutation |
+| `functors-text` | shaped runs, font resources, text metrics, cursor and selection geometry | raw GPU resources, window handles, or document mutation |
+| `functors-widgets` | semantic controls, widget layout, focus, hit testing, themes, accessibility metadata | WGPU/Vello calls, platform events, or domain-owned state mutation |
 | `renderer` | WGPU resources, surface lifecycle, buffers, pipelines, presentation | direct inspection of the domain model |
 | `workspace.rs` | validated project roots, directory entries, discovery errors | editor rendering details and model mutation |
 | `notebook` | cells, dependency graph, execution state, outputs | platform lifecycle and direct UI mutation |

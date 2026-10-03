@@ -23,10 +23,10 @@ geometry also needs to remain synchronized with shaped glyph positions and
 emoji advances.
 
 **Required direction:** Keep `FrameDescription` backend-neutral and replace the
-pixel-quad bridge with a real text surface or glyph atlas. On Windows, evaluate
-DirectWrite + Direct2D for the highest native quality. For cross-platform
-rendering, evaluate Skia's GPU backend or a WGPU-native stack based on
-`cosmic-text`/`glyphon`.
+pixel-quad bridge with a Vello scene and GPU text path. Validate the selected
+shaping and font-fallback stack on Windows first, including color emoji and
+mixed-font cursor geometry. Keep a platform-neutral fallback plan while
+Vello's text integration is being proven.
 
 **Done when:** Consolas and Segoe UI Emoji render sharply, color emoji work
 where the platform supports them, cursor and selection geometry remain aligned
@@ -105,8 +105,8 @@ resources outside their declared capabilities.
 
 - Preserve the dependency direction:
   `winit -> input -> Message -> update -> Model -> view -> FrameDescription -> renderer`.
-- Keep WGPU available for composition, geometry, notebook surfaces, and future
-  visualization even if a platform text backend changes.
+- Keep WGPU available as Vello's composition backend for geometry, notebook
+  surfaces, and future visualization.
 - Do not put window handles, WGPU resources, Direct2D objects, Skia objects, or
   webview handles in model, MVU, or backend-neutral view code.
 - Treat the current fontdue/bitmap fallback and Skia pixel-quad path as

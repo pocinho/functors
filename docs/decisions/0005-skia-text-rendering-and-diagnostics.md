@@ -1,6 +1,6 @@
 # 0005: Prefer Skia for Cross-Platform Text Rendering
 
-- Status: Accepted
+- Status: Superseded by 0006
 - Date: 2026-10-02
 
 ## Context

@@ -10,6 +10,7 @@ references for Functors.
 - [Module Ownership](module_ownership.md) - dependency direction and subsystem responsibilities
 - [Rust Best Practices](rust_best_practices.md) - Rust and architecture standards
 - [Architecture](architecture.md) - product vision and current architecture
+- [Rendering Architecture](rendering_architecture.md) - Vello migration and renderer contracts
 - [Architecture Decisions](decisions/README.md) - decisions that should remain explicit over time
 - [Future Documentation](future.md) - documentation to add when future boundaries become real
 - [Roadmap](roadmap.md) - planned capabilities and sequencing

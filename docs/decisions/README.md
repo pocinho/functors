@@ -38,3 +38,5 @@ workflow documentation.
 - [0002: Use a Private Rope-Backed Document](0002-private-rope-backed-document.md)
 - [0003: Keep Syntax Highlighting Backend-Neutral](0003-backend-neutral-syntax-highlighting.md)
 - [0005: Prefer Skia for Cross-Platform Text Rendering](0005-skia-text-rendering-and-diagnostics.md)
+- [0006: Prefer Vello for Rendering and Composition](0006-vello-rendering-and-composition.md)
+- [0007: Create Functors-Owned Text and Widget Layers](0007-functors-text-and-widgets.md)

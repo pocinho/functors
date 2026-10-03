@@ -67,10 +67,11 @@ Keep document invariants at the document boundary, keep `FrameDescription`
 inspectable and deterministic, and add headless tests before GUI tests. The
 renderer currently loads Consolas as the Windows editor font and Segoe UI Emoji
 as its fallback, with a public-domain bitmap path as a degraded fallback. The
-intended production text backend is Skia, which should provide
-cross-platform shaping, platform font fallback, emoji handling, and future
-diagnostic overlays while WGPU remains the composition path. See
-`docs/decisions/0005-skia-text-rendering-and-diagnostics.md`.
+intended production rendering path is Vello over WGPU, with Vello owning
+vector composition and the eventual GPU text path. Text shaping, platform font
+fallback, color-font support, and diagnostic overlays must be validated against
+the selected Vello text stack. See
+`docs/decisions/0006-vello-rendering-and-composition.md`.
 
 For Rust changes, run `cargo fmt --check`, `cargo check`, and `cargo test`.
 Changes to window lifecycle, input routing, rendering, or visible geometry
